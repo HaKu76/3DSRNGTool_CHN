@@ -9,14 +9,22 @@ namespace Pk3DSRNGTool
         public override int[] Species { get; set; } = new int[1];
         public byte NPC, Correction = 1;
 
+        // Both SM and USUM use these rates. Poni Plains area 4 has its own
+        // raw slot order/rates; do not infer the order from summed percentages.
+        public byte SlotDistributionIndex => (byte)(Location == 166 && idx == 4 ? 1 : 0);
+
         public byte LevelMin;
         protected byte _LevelMax;
         public byte LevelMax { get { return _LevelMax > 0 ? _LevelMax : (byte)(LevelMin + 3); } set { _LevelMax = value; } }
         public short lvldiff; // Sun moon encounter area levels difference (Moon - Sun)
-        public byte LevelMinMoon => (byte)(LevelMin + lvldiff);
-        public byte LevelMaxMoon => (byte)(LevelMax + lvldiff);
+        private byte? moonLevelMin, moonLevelMax;
+        public byte LevelMinMoon { get { return moonLevelMin ?? (byte)(LevelMin + lvldiff); } set { moonLevelMin = value; } }
+        public byte LevelMaxMoon { get { return moonLevelMax ?? (byte)(LevelMax + lvldiff); } set { moonLevelMax = value; } }
+        public byte GetLevelMin(int version) => version == 6 || version == 8 ? LevelMinMoon : LevelMin;
+        public byte GetLevelMax(int version) => version == 6 || version == 8 ? LevelMaxMoon : LevelMax;
 
-        public bool Reverse; // true if moon/night have more species
+        public bool ReverseDayNight; // The base table contains nighttime species.
+        public bool ReverseVersion; // The base table contains Moon-exclusive species.
         public bool Raining;
 
         public override int[] getSpecies(int ver, bool IsNight) => getSpecies(ver == 6 || ver == 8, IsNight);
@@ -29,8 +37,8 @@ namespace Pk3DSRNGTool
 
         protected virtual int[] getSpecies(bool IsMoon, bool IsNight)
         {
-            IsNight ^= Reverse;
-            IsMoon ^= Reverse;
+            IsNight ^= ReverseDayNight;
+            IsMoon ^= ReverseVersion;
             int[] table = (int[])Species.Clone();
             for (int i = 1; i < table.Length; i++)
             {
@@ -91,7 +99,7 @@ namespace Pk3DSRNGTool
             new byte[]{1,2,3,4,5,6,7,6,8,8}, //41
             new byte[]{1,2,3,3,4,4,5,6,7,7}, //42
             new byte[]{1,2,3,4,3,4,5,6,6,7}, //43
-            new byte[]{1,2,3,4,5,6,7,8,9,10}, //44 oops
+            new byte[]{1,2,3,4,5,6,7,8,9,10}, //44: all ten slots are listed explicitly
             new byte[]{1,2,1,2,3,4,5,5,6,6}, //45
             new byte[]{1,2,3,4,5,5,6,6,7,7}, //46
             new byte[]{1,2,3,3,4,5,5,6,7,7}, //47
@@ -139,6 +147,7 @@ namespace Pk3DSRNGTool
             {296, 096}, {096, 296}, // Drowzee <-> Makuhita
             {297, 097}, {097, 297},
             {447, 427},             // Riolu -> Buneary
+            {177, 278},             // Natu -> Wingull (Akala Outskirts)
             // Reverse from here
             {200, 743},             // Misdreavus -> Ribombee
         };
@@ -158,8 +167,7 @@ namespace Pk3DSRNGTool
         protected override int[] getSpecies(bool IsMoon, bool IsNight)
         {
             var table = base.getSpecies(IsMoon, IsNight);
-            IsNight ^= Reverse;
-            IsMoon ^= Reverse;
+            IsNight ^= ReverseDayNight;
             for (int i = 1; i < table.Length; i++)
                 if (IsNight)
                 {
